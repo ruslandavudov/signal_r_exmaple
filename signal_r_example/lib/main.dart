@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:signalr_core/signalr_core.dart';
 
-
-// import 'dart:io';
-// import 'package:signalr_core/signalr_core.dart';
-import 'package:logging/logging.dart';
-import 'package:signalr_netcore/signalr_client.dart';
+// import 'package:logging/logging.dart';
+// import 'package:signalr_netcore/signalr_client.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,11 +14,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Demo application for SignalR',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Demo application for SignalR'),
     );
   }
 }
@@ -35,47 +33,50 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  final _url = 'https://app.vmireapp.ru/online?id=IlvhIPnBEwoYe1XS0T0YTw';
 
-  final _url = 'https://app.vmireapp.ru';
+  late HubConnection hubConnection;
+  late bool _isConnected;
 
-  Future<void> _incrementCounter() async {
+  @override
+  void initState() {
+    _isConnected = false;
+    hubConnection = HubConnectionBuilder()
+        .withUrl(
+            _url,
+            HttpConnectionOptions(
+              logMessageContent: true,
+              logging: (level, message) {
+                print(message);
+              },
+            ))
+        .build();
 
-    Logger.root.level = Level.ALL;
-
-    Logger.root.onRecord.listen((LogRecord rec) {
-      print('${rec.level.name}: ${rec.time}: ${rec.message}');
+    hubConnection.on('ServerReply', (message) {
+      print(message.toString());
     });
 
-    final hubProtLogger = Logger("SignalR - hub");
-
-    final transportProtLogger = Logger("SignalR - transport");
-
-    final connectionOptions = HttpConnectionOptions();
-    final httpOptions = HttpConnectionOptions(logger: transportProtLogger);
-
-    final hubConnection = HubConnectionBuilder().withUrl(_url, options: httpOptions).configureLogging(hubProtLogger).build();
-
-    // hubConnection.onclose((error) => print("Connection Closed"));
-    hubConnection.onclose(_onClose);
-
-    await hubConnection.start();
-    // final connection = HubConnectionBuilder().withUrl('https://app.vmireapp.ru',
-    //     HttpConnectionOptions(
-    //       logging: (level, message) => print(message),
-    //     )).build();
-    //
-    // await connection.start();
-    //
-    // connection.on('ReceiveMessage', (message) {
-    //   print(message.toString());
-    // });
-    //
-    // await connection.invoke('SendMessage', args: ['Bob', 'Says hi!']);
+    super.initState();
   }
 
-  void _onClose({Exception? error}) {
-    print("Connection Closed");
+  Future<void> _disconnect() async {
+    await hubConnection.stop().then((result) async {
+      setState(() {
+        _isConnected = hubConnection.state == HubConnectionState.connected;
+      });
+    });
+  }
+
+  Future<void> _connect() async {
+    await hubConnection.start()?.then((result) async {
+      setState(() {
+        _isConnected = hubConnection.state == HubConnectionState.connected;
+      });
+    });
+  }
+
+  Future<void> _invoke() async {
+    await hubConnection.invoke('Register', args: ['79001112233']);
   }
 
   @override
@@ -83,25 +84,43 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        centerTitle: true,
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+            TextButton(
+              onPressed: () async =>
+                  _isConnected ? await _disconnect() : await _connect(),
+              child: Container(
+                width: 100,
+                height: 50,
+                color: _isConnected ? Colors.blue : Colors.green,
+                child: Center(
+                  child: Text(
+                    _isConnected ? 'Disconnect' : 'Connect',
+                    style: const TextStyle(color: Colors.black),
+                  ),
+                ),
+              ),
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
+            TextButton(
+              onPressed: () async => _isConnected ? await _invoke() : null,
+              child: Container(
+                width: 100,
+                height: 50,
+                color: Colors.grey,
+                child: const Center(
+                  child: Text(
+                    'Invoke',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
